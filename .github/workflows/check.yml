@@ -27,7 +27,7 @@ jobs:
           TARGET_PACKAGE_BROKER = "microsoft-identity-broker"
           TARGET_PACKAGE_INTUNE = "intune-portal"
           
-          MIN_VERSION_BROKER_22 = "2.0.0"
+          MIN_VERSION_BROKER_22 = "2.0.1"
           MIN_VERSION_BROKER_24 = "2.0.1"
           MIN_VERSION_INTUNE_22 = "1.2503.10-jammy"
           MIN_VERSION_INTUNE_24 = "1.2503.10-noble"
