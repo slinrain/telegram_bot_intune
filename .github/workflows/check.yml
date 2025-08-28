@@ -2,8 +2,7 @@ name: Daily Microsoft package check
 
 on:
   schedule:
-    # 06:00 UTC ~= 08:00 Europe/Kyiv during summer (UTC+3)
-    - cron: "0 8 * * *"
+    - cron: "0 6 * * *"   # 06:00 UTC
   workflow_dispatch: {}
 
 jobs:
@@ -41,7 +40,7 @@ jobs:
               s = requests.Session()
               retries = Retry(total=5, backoff_factor=0.7, status_forcelist=(429, 500, 502, 503, 504))
               s.mount("https://", HTTPAdapter(max_retries=retries))
-              s.headers.update({"User-Agent": "pkg-checker/1.2"})
+              s.headers.update({"User-Agent": "pkg-checker/1.3"})
               return s
 
           def fetch_text(url):
@@ -71,31 +70,32 @@ jobs:
               flush()
               return fields.get("Package"), fields.get("Version")
 
-          def find_pkg_version(text, name):
+          def iter_package_versions(text, name):
               stanza = []
               for line in text.splitlines():
                   if line.strip() == "":
                       if stanza:
                           pkg, ver = parse_stanza(stanza)
-                          if pkg == name:
-                              return ver
+                          if pkg == name and ver:
+                              yield ver
                           stanza = []
                       continue
                   stanza.append(line)
               if stanza:
                   pkg, ver = parse_stanza(stanza)
-                  if pkg == name:
-                      return ver
-              return None
+                  if pkg == name and ver:
+                      yield ver
 
-          # --- Lightweight version comparator ---
+          # --- Lightweight Debian-ish version comparator ---
           def _int_digits(s: str) -> int:
               d = "".join(ch for ch in s if ch.isdigit())
               return int(d) if d else 0
 
           def _split_ver(v: str):
+              # ignore epoch if present
               if ":" in v:
                   _, v = v.split(":", 1)
+              # upstream - debian revision
               if "-" in v:
                   upstream, debrev = v.split("-", 1)
               else:
@@ -103,18 +103,29 @@ jobs:
               nums = tuple(int(p) if p.isdigit() else _int_digits(p) for p in upstream.split("."))
               return nums, debrev
 
-          def version_ge(a: str, b: str) -> bool:
+          def version_cmp(a: str, b: str) -> int:
               a_nums, a_rev = _split_ver(a)
               b_nums, b_rev = _split_ver(b)
               if a_nums != b_nums:
-                  return a_nums > b_nums
+                  return 1 if a_nums > b_nums else -1
+              # If numeric equal, handle revision (treat missing rev as older than having one, like Debian)
               if a_rev == b_rev:
-                  return True
+                  return 0
               if a_rev == "" and b_rev != "":
-                  return True
+                  return -1
               if a_rev != "" and b_rev == "":
-                  return False
-              return a_rev >= b_rev
+                  return 1
+              return (1 if a_rev > b_rev else -1) if a_rev != b_rev else 0
+
+          def version_ge(a: str, b: str) -> bool:
+              return version_cmp(a, b) >= 0
+
+          def latest_version(text, name):
+              latest = None
+              for ver in iter_package_versions(text, name):
+                  if latest is None or version_cmp(ver, latest) > 0:
+                      latest = ver
+              return latest
 
           # --- Telegram ---
           def send_telegram(msg: str):
@@ -136,7 +147,7 @@ jobs:
               results = []
 
               def check_one(label, text, pkg, minver):
-                  ver = find_pkg_version(text, pkg)
+                  ver = latest_version(text, pkg)
                   if ver is None:
                       results.append(f"❌ [{label}] '{pkg}' not found.")
                       return
