@@ -2,8 +2,8 @@ name: Daily Microsoft package check
 
 on:
   schedule:
-    # 06:00 UTC ~= 09:00 Europe/Kyiv during summer (EEST, UTC+3)
-    - cron: "0 6 * * *"
+    # 06:00 UTC ~= 08:00 Europe/Kyiv during summer (UTC+3)
+    - cron: "0 8 * * *"
   workflow_dispatch: {}
 
 jobs:
@@ -41,7 +41,7 @@ jobs:
               s = requests.Session()
               retries = Retry(total=5, backoff_factor=0.7, status_forcelist=(429, 500, 502, 503, 504))
               s.mount("https://", HTTPAdapter(max_retries=retries))
-              s.headers.update({"User-Agent": "pkg-checker/1.1"})
+              s.headers.update({"User-Agent": "pkg-checker/1.2"})
               return s
 
           def fetch_text(url):
@@ -49,7 +49,7 @@ jobs:
               r.raise_for_status()
               return r.text
 
-          # --- Debian Packages parsing (stanza-based) ---
+          # --- Packages parsing ---
           def parse_stanza(lines):
               fields = {}
               key, buf = None, []
@@ -88,14 +88,14 @@ jobs:
                       return ver
               return None
 
-          # --- Lightweight version comparator (sufficient for these versions) ---
+          # --- Lightweight version comparator ---
           def _int_digits(s: str) -> int:
               d = "".join(ch for ch in s if ch.isdigit())
               return int(d) if d else 0
 
           def _split_ver(v: str):
               if ":" in v:
-                  _, v = v.split(":", 1)  # ignore epoch
+                  _, v = v.split(":", 1)
               if "-" in v:
                   upstream, debrev = v.split("-", 1)
               else:
@@ -140,11 +140,10 @@ jobs:
                   if ver is None:
                       results.append(f"❌ [{label}] '{pkg}' not found.")
                       return
-                  ok = version_ge(ver, minver)
-                  if ok:
+                  if version_ge(ver, minver):
                       results.append(f"✅ [{label}] '{pkg}' {ver} (≥ {minver}).")
                   else:
-                      results.append(f"⚠️ [{label}] '{pkg}' {ver} (< {minver}).")
+                      results.append(f"ℹ️ [{label}] '{pkg}': The latest version is {ver} and not present newer version (≥ {minver}).")
 
               # jammy (22.04)
               check_one("22.04 jammy", pkgs22, TARGET_PACKAGE_BROKER, MIN_VERSION_BROKER_22)
