@@ -15,6 +15,7 @@ jobs:
       - name: Run checker inline
         shell: bash
         run: |
+          python - << 'PY'
           import os, requests
           from requests.adapters import HTTPAdapter
           from urllib3.util.retry import Retry
