@@ -15,39 +15,38 @@ jobs:
       - name: Run checker inline
         shell: bash
         run: |
-          python - << 'PY'
           import os, requests
           from requests.adapters import HTTPAdapter
           from urllib3.util.retry import Retry
-
+          
           # --- Config ---
           PACKAGES_URL_22 = "https://packages.microsoft.com/ubuntu/22.04/prod/dists/jammy/main/binary-amd64/Packages"
           PACKAGES_URL_24 = "https://packages.microsoft.com/ubuntu/24.04/prod/dists/noble/main/binary-amd64/Packages"
-
+          
           TARGET_PACKAGE_BROKER = "microsoft-identity-broker"
           TARGET_PACKAGE_INTUNE = "intune-portal"
-
+          
           MIN_VERSION_BROKER_22 = "2.0.1"
           MIN_VERSION_BROKER_24 = "2.0.1"
           MIN_VERSION_INTUNE_22 = "1.2503.10-jammy"
           MIN_VERSION_INTUNE_24 = "1.2503.10-noble"
-
+          
           BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
           CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
-
+          
           # --- HTTP helpers ---
           def make_session():
               s = requests.Session()
               retries = Retry(total=5, backoff_factor=0.7, status_forcelist=(429, 500, 502, 503, 504))
               s.mount("https://", HTTPAdapter(max_retries=retries))
-              s.headers.update({"User-Agent": "pkg-checker/1.3"})
+              s.headers.update({"User-Agent": "pkg-checker/1.6"})
               return s
-
+          
           def fetch_text(url):
               r = make_session().get(url, timeout=45)
               r.raise_for_status()
               return r.text
-
+          
           # --- Packages parsing ---
           def parse_stanza(lines):
               fields = {}
@@ -69,7 +68,7 @@ jobs:
                       if key: buf.append(raw.strip())
               flush()
               return fields.get("Package"), fields.get("Version")
-
+          
           def iter_package_versions(text, name):
               stanza = []
               for line in text.splitlines():
@@ -85,48 +84,45 @@ jobs:
                   pkg, ver = parse_stanza(stanza)
                   if pkg == name and ver:
                       yield ver
-
-          # --- Lightweight Debian-ish version comparator ---
+          
+          # --- Version comparison ---
           def _int_digits(s: str) -> int:
               d = "".join(ch for ch in s if ch.isdigit())
               return int(d) if d else 0
-
+          
           def _split_ver(v: str):
-              # ignore epoch if present
               if ":" in v:
                   _, v = v.split(":", 1)
-              # upstream - debian revision
               if "-" in v:
                   upstream, debrev = v.split("-", 1)
               else:
                   upstream, debrev = v, ""
               nums = tuple(int(p) if p.isdigit() else _int_digits(p) for p in upstream.split("."))
               return nums, debrev
-
+          
           def version_cmp(a: str, b: str) -> int:
               a_nums, a_rev = _split_ver(a)
               b_nums, b_rev = _split_ver(b)
               if a_nums != b_nums:
                   return 1 if a_nums > b_nums else -1
-              # If numeric equal, handle revision (treat missing rev as older than having one, like Debian)
               if a_rev == b_rev:
                   return 0
               if a_rev == "" and b_rev != "":
                   return -1
               if a_rev != "" and b_rev == "":
                   return 1
-              return (1 if a_rev > b_rev else -1) if a_rev != b_rev else 0
-
-          def version_ge(a: str, b: str) -> bool:
-              return version_cmp(a, b) >= 0
-
+              return 1 if a_rev > b_rev else -1
+          
+          def version_gt(a: str, b: str) -> bool:
+              return version_cmp(a, b) > 0
+          
           def latest_version(text, name):
               latest = None
               for ver in iter_package_versions(text, name):
                   if latest is None or version_cmp(ver, latest) > 0:
                       latest = ver
               return latest
-
+          
           # --- Telegram ---
           def send_telegram(msg: str):
               if not BOT_TOKEN or not CHAT_ID:
@@ -138,37 +134,37 @@ jobs:
                   requests.post(url, data=data, timeout=20)
               except Exception as e:
                   print("Failed to send Telegram message:", e)
-
+          
           # --- Run checks ---
           def run():
               pkgs22 = fetch_text(PACKAGES_URL_22)
               pkgs24 = fetch_text(PACKAGES_URL_24)
-
+          
               results = []
-
+          
               def check_one(label, text, pkg, minver):
                   ver = latest_version(text, pkg)
                   if ver is None:
                       results.append(f"❌ [{label}] '{pkg}' not found.")
                       return
-                  if version_ge(ver, minver):
-                      results.append(f"✅ [{label}] '{pkg}' {ver} (≥ {minver}).")
+                  if version_gt(ver, minver):
+                      results.append(f"✅ [{label}] '{pkg}' {ver} (> {minver}).")
                   else:
-                      results.append(f"ℹ️ [{label}] '{pkg}': The latest version is {ver} and not present newer version (≥ {minver}).")
-
+                      results.append(f"❌ [{label}] No new version of '{pkg}' (latest is {ver}, ≤ {minver}).")
+          
               # jammy (22.04)
               check_one("22.04 jammy", pkgs22, TARGET_PACKAGE_BROKER, MIN_VERSION_BROKER_22)
               check_one("22.04 jammy", pkgs22, TARGET_PACKAGE_INTUNE, MIN_VERSION_INTUNE_22)
-
+          
               # noble (24.04)
               check_one("24.04 noble", pkgs24, TARGET_PACKAGE_BROKER, MIN_VERSION_BROKER_24)
               check_one("24.04 noble", pkgs24, TARGET_PACKAGE_INTUNE, MIN_VERSION_INTUNE_24)
-
+          
               msg = "\n".join(results) + \
                     f"\n\n22.04 list: {PACKAGES_URL_22}\n24.04 list: {PACKAGES_URL_24}"
               print(msg)
               send_telegram(msg)
-
+          
           if __name__ == "__main__":
               run()
           PY
