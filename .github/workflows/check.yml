@@ -29,8 +29,8 @@ jobs:
           
           MIN_VERSION_BROKER_22 = "2.0.1"
           MIN_VERSION_BROKER_24 = "2.0.1"
-          MIN_VERSION_INTUNE_22 = "1.2503.10-jammy"
-          MIN_VERSION_INTUNE_24 = "1.2503.10-noble"
+          MIN_VERSION_INTUNE_22 = "1.2508.17-jammy"
+          MIN_VERSION_INTUNE_24 = "1.2508.17-noble"
           
           BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
           CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
