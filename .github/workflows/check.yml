@@ -27,10 +27,10 @@ jobs:
           TARGET_PACKAGE_BROKER = "microsoft-identity-broker"
           TARGET_PACKAGE_INTUNE = "intune-portal"
           
-          MIN_VERSION_BROKER_22 = "2.0.1"
-          MIN_VERSION_BROKER_24 = "2.0.1"
-          MIN_VERSION_INTUNE_22 = "1.2508.17-jammy"
-          MIN_VERSION_INTUNE_24 = "1.2508.17-noble"
+          MIN_VERSION_BROKER_22 = "3.0.2"
+          MIN_VERSION_BROKER_24 = "3.0.2"
+          MIN_VERSION_INTUNE_22 = "1.2603.31-jammy"
+          MIN_VERSION_INTUNE_24 = "1.2603.31-noble"
           
           BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
           CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
